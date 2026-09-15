@@ -1,120 +1,70 @@
-# 楓之谷角色數值健檢 V6.0｜Cloudflare Pages 後端版
+# 楓之谷角色數值健檢 V6.0 — Cloudflare Workers
 
-## 你現在要做的事情
+這個版本是 **Cloudflare Workers + Workers Static Assets** 架構。
 
-這個版本已經把：
-
-- OpenAI API Key
-- GPT Vision 模型
-- Vision Prompt
-- JSON Schema
-
-全部放到後端。
-
-瀏覽器只會把 3 張圖片送到 `/api/vision`，後端再呼叫 OpenAI。
-
-## 1. 上傳到 GitHub
-
-建立一個新的 GitHub repository，例如：
-
-`maple-character-checker`
-
-把本資料夾內的檔案放進 repository 根目錄：
+## 專案結構
 
 ```text
-index.html
-wrangler.toml
-.gitignore
-functions/
-  api/
-    vision.js
+maple-character-checker/
+├─ public/
+│  └─ index.html
+├─ src/
+│  ├─ index.js
+│  └─ vision.js
+├─ wrangler.jsonc
+├─ package.json
+└─ .gitignore
 ```
 
-## 2. Cloudflare Pages
+## Cloudflare Workers Builds 設定
 
-使用 Cloudflare Pages 的 Git integration 連接 GitHub。
+- Project name: `maple-character-checker`
+- Build command: `exit 0`
+- Deploy command: `npx wrangler deploy`
+- Production branch: `main`
 
-設定：
+## OpenAI API Key
 
-- Production branch：`main`
-- Build command：`exit 0`
-- Build output directory：`.`
-
-因為這個專案是純 HTML + Pages Functions，不需要 npm build。
-
-## 3. 設定 OPENAI_API_KEY
-
-Cloudflare：
-
-Workers & Pages
-→ 選擇你的 Pages 專案
-→ Settings
-→ Variables and Secrets
-→ Add
+Cloudflare Dashboard → Workers & Pages → `maple-character-checker`
+→ Settings → Variables and Secrets
 
 新增：
 
-```text
-Name:
-OPENAI_API_KEY
+- Type: Secret
+- Variable name: `OPENAI_API_KEY`
+- Value: 你的 OpenAI API Key
 
-Value:
-你的 OpenAI API Key
+不要把 API Key 寫進 `public/index.html`、GitHub 或任何前端 JavaScript。
 
-Type:
-Secret / Encrypt
-```
+## 模型
 
-Production 和 Preview 如果都有要測試，兩個環境都設定。
+模型固定在後端：
 
-## 4. 重新部署
+`gpt-5.6-luna`
 
-設定 Secret 後重新部署。
+前端不再顯示 API Key 輸入框，也不讓使用者修改模型。
 
-完成後：
+## API
 
-```text
-你的網站
-   ↓
-/api/vision
-   ↓
-Cloudflare Pages Function
-   ↓
-OPENAI_API_KEY
-   ↓
-OpenAI Responses API
-```
+前端呼叫：
 
-前端不會看到 API Key。
+`POST /api/vision`
 
-## 5. 本地測試
+Worker 收到 3 張 data URL 圖片後，從 `OPENAI_API_KEY` Secret 呼叫 OpenAI Responses API。
 
-不要直接雙擊 index.html。
+OpenAI 的原始回應不會回傳給瀏覽器，只回傳解析後的辨識 JSON 與 usage。
 
-如果電腦有 Node.js：
+## 本機測試
 
 ```bash
-npx wrangler pages dev .
+npm install
+npx wrangler dev
 ```
 
-然後使用 Wrangler 顯示的 localhost 網址。
-
-本地 Secret 可放 `.dev.vars`，例如：
+如果本機測試，需要在專案根目錄建立 `.dev.vars`：
 
 ```text
-OPENAI_API_KEY="你的 API Key"
+OPENAI_API_KEY="你的 OpenAI API Key"
 ```
 
-`.dev.vars` 已經被 `.gitignore` 排除，絕對不要 commit。
-
-## 重要
-
-不要把真正的 API Key 寫進：
-
-- index.html
-- vision.js
-- GitHub
-- wrangler.toml
-- README.md
-
-只放在 Cloudflare Secret。
+`.dev.vars` 已加入 `.gitignore`，不要提交到 GitHub。

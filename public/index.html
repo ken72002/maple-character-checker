@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>楓之谷角色數值健檢 V6.0｜GPT Vision</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f4f6f8;color:#222;font-family:Arial,"Noto Sans TC",sans-serif}
+.wrap{max-width:1180px;margin:auto;padding:24px}.card{background:#fff;border-radius:16px;padding:20px;margin:0 0 18px;box-shadow:0 3px 16px #0000000d}
+h1,h2,h3{margin:0 0 14px}.muted{color:#69717d;font-size:13px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+input,select,button{font:inherit}input[type=password],select,input[type=file]{width:100%;padding:11px;border:1px solid #cfd5dc;border-radius:9px;background:#fff}
+button{padding:11px 16px;border:0;border-radius:9px;background:#222;color:#fff;cursor:pointer;font-weight:700}button:disabled{opacity:.5;cursor:not-allowed}
+.preview{width:100%;height:230px;object-fit:contain;background:#eef0f3;border-radius:10px;margin-top:7px}.pill{display:inline-block;padding:5px 9px;border-radius:999px;background:#eef1f4;margin:3px;font-size:13px}
+.ok{color:#087f23}.warn{color:#9a6200}.bad{color:#b00020}.hero{background:#17191d;color:#fff}.hero .muted{color:#c4c9d0}
+.result-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.metric{padding:12px;border:1px solid #e2e5e9;border-radius:10px}.metric b{display:block;font-size:20px;margin-top:5px}
+table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:9px;border-bottom:1px solid #e7e9ec}th{background:#f8f9fa}
+pre{white-space:pre-wrap;word-break:break-word;background:#111;color:#eee;padding:15px;border-radius:10px;overflow:auto;max-height:520px}
+.rec{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:9px;margin:7px 0;background:#fff;border-left:4px solid #cfd5dc}
+.baseline-box{padding:20px 22px;border-radius:14px;background:#f7f9fc;border:1px solid #dce3ed;margin:0 0 16px}
+.baseline-title{font-size:19px;font-weight:800;line-height:1.55;color:#242a31}
+.baseline-title span{display:inline-block;margin-left:3px}
+.baseline-value{font-size:34px;font-weight:900;line-height:1.15;margin:8px 0 18px}
+.baseline-subtitle{font-size:14px;font-weight:800;color:#343a42;margin:0 0 8px}
+.baseline-items{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:6px}
+.baseline-item{padding:10px 12px;border:1px solid #dfe4eb;background:#fff;border-radius:9px;position:relative}
+.baseline-item span{display:block;font-size:13px;color:#69717d;margin-bottom:3px}
+.baseline-item strong{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:18px;color:#242a31}
+.baseline-item.baseline-up strong,.baseline-item.baseline-up em{color:#168a3b}
+.baseline-item.baseline-down strong,.baseline-item.baseline-down em{color:#d93025}
+.baseline-item.baseline-neutral strong,.baseline-item.baseline-neutral em{color:#6f7782}
+.baseline-item em{display:block;font-size:12px;font-style:normal;font-weight:800;margin-top:3px}
+.legend-green{color:#168a3b}.legend-red{color:#d93025}
+.overflow-warning{display:inline-flex;align-items:center;gap:4px}
+.overflow-warning .triangle{color:#e0a800;font-size:15px}
+@media(max-width:700px){.baseline-items{grid-template-columns:repeat(2,1fr)}}
+.explain-row{display:grid;grid-template-columns:108px 1fr;gap:14px;padding:13px 0;border-top:1px solid #e1e5eb}
+.explain-label{font-size:15px;font-weight:800;color:#343a42}
+.explain-content{font-size:15px;line-height:1.8;color:#505862}
+.formula-text{font-weight:700;letter-spacing:.2px}
+.explain-content strong{font-weight:900;color:#222}
+.tolerance-box{margin-top:13px;padding:11px 13px;border-radius:9px;background:#fff;border:1px solid #e1e5eb;font-size:13px;line-height:1.7;color:#626b76}
+.tolerance-box strong{display:block;color:#343a42;margin-bottom:2px}
+.tolerance-box span{display:block}
+@media(max-width:600px){.explain-row{grid-template-columns:1fr;gap:4px}}
+.rec b{min-width:90px}.rec span{color:#4c535c}.rec.bad{border-left-color:#d64545}.rec.warn{border-left-color:#c68a00}.rec.good{border-left-color:#2e8b57}
+td.ok{color:#087f23}td.warn{color:#9a6200}td.bad{color:#b00020}small{display:block;margin-top:4px;color:#69717d}
+@media(max-width:850px){.grid{grid-template-columns:1fr}.result-grid{grid-template-columns:repeat(2,1fr)}} 
+</style>
+
+<style>
+.v6-note{margin-top:8px;padding:10px 12px;border-radius:9px;background:#f7f9fc;border:1px solid #e1e5eb;font-size:13px;color:#626b76}
+#run{min-width:180px}
+#status{display:inline-block;vertical-align:middle}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="card hero">
+<h1>楓之谷角色數值健檢 V6.0</h1>
+<div class="muted">GPT Vision 負責「看圖抄數值」；JavaScript 負責「固定規則健檢」。本版先以 API Key 直連測試，尚未加入正式後端。</div>
+</div>
+
+<div class="card">
+<h2>STEP 1｜選擇健檢情況</h2>
+<select id="useCase">
+<option value="mobs">只有小怪</option>
+<option value="boss">只有 BOSS</option>
+<option value="both">BOSS & 小怪</option>
+<option value="pvp_hit">PVP｜命中流</option>
+<option value="pvp_evasion">PVP｜迴避流</option>
+</select>
+<label style="display:flex;align-items:center;gap:8px;margin-top:14px;font-weight:700;cursor:pointer">
+  <input id="relicCycle" type="checkbox" style="width:18px;height:18px">
+  是否攜帶遺物「循環」？
+</label>
+<div class="muted" style="margin-top:6px">有勾選：暴擊率基準 140%；未勾選：暴擊率基準 100%。超過 100% 額外標示「數值溢出」。</div>
+</div>
+
+<div class="card">
+<h2>STEP 2｜上傳角色數值截圖</h2>
+<div class="grid">
+<div>
+<label>GPT Vision</label>
+<div class="v6-note">API Key 與辨識模型已移至後端，前端不會再要求輸入 API Key。</div>
+</div>
+
+<div>
+<label>圖片</label>
+<input id="files" type="file" accept="image/*" multiple>
+<div id="fileInfo" class="muted">請一次選取 3 張角色數值截圖（依照圖 1 → 圖 2 → 圖 3 順序）。</div>
+</div>
+</div>
+<div id="previews" class="grid" style="margin-top:14px"></div>
+<br>
+<button id="run">開始 GPT Vision 辨識</button>
+<span id="status" class="muted" style="margin-left:10px"></span>
+</div>
+
+<div class="card">
+<h2>STEP 3｜角色健檢</h2>
+<div class="muted" style="margin-bottom:12px">健檢規則固定由網站計算，不由 GPT 自行判斷；平均值就是配置基準；網站只用它判斷配置失衡與優先補強方向。</div>
+<div id="health">尚未執行。</div>
+</div>
+
+<div class="card">
+<h2>辨識數值</h2>
+<div id="values">尚未執行。</div>
+</div>
+
+<div class="card">
+<h2>辨識 JSON</h2>
+<pre id="raw">尚未執行。</pre>
+</div>
+</div>
+
+<script>
+const fields = {
+attack:"攻擊力",defense:"防禦力",max_hp:"最大HP",max_mp:"最大MP",crit_rate:"暴擊率",crit_damage:"暴擊傷害",
+attack_speed:"攻擊速度",strength:"力量",dexterity:"敏捷",intelligence:"智力",luck:"幸運",
+attribute_ratio_damage:"屬性比例傷害",mp_regen:"每秒恢復MP",damage_reduction:"所受傷害減少",damage:"傷害",
+damage_amplification:"傷害增幅",basic_attack_damage:"基本攻擊傷害",skill_damage:"技能傷害",
+defense_penetration:"防禦穿透力",boss_damage:"BOSS怪物傷害",normal_monster_damage:"一般怪物傷害",
+hit:"命中",evasion:"迴避",min_damage_multiplier:"最小傷害倍率",max_damage_multiplier:"最大傷害倍率",
+exp_gain:"經驗值獲得量",mesos_gain:"楓幣獲得量",final_damage:"最終傷害",debuff_resistance:"減益耐性",
+basic_attack_target_increase:"基本攻擊目標數增加",skill_cooldown_percent:"技能冷卻時間減少（%）",
+skill_cooldown_seconds:"技能冷卻時間減少（秒）",main_stat_per_4_levels:"每4等級的主屬性",
+job1_skill_level:"1轉技能等級",job2_skill_level:"2轉技能等級",job3_skill_level:"3轉技能等級",
+job4_skill_level:"4轉技能等級",all_skill_level:"所有技能等級"
+};
+
+const expected={
+image_1:["attack","defense","max_hp","max_mp","crit_rate","crit_damage","attack_speed","strength","dexterity","intelligence","luck","attribute_ratio_damage","mp_regen"],
+image_2:["damage_reduction","damage","damage_amplification","basic_attack_damage","skill_damage","defense_penetration","boss_damage","normal_monster_damage","hit","evasion","min_damage_multiplier","max_damage_multiplier","exp_gain"],
+image_3:["min_damage_multiplier","max_damage_multiplier","exp_gain","mesos_gain","final_damage","debuff_resistance","basic_attack_target_increase","skill_cooldown_percent","skill_cooldown_seconds","main_stat_per_4_levels","job1_skill_level","job2_skill_level","job3_skill_level","job4_skill_level","all_skill_level"]
+};
+
+function propsFor(keys){
+ const p={};
+ for(const k of keys)p[k]={type:"string",description:`「${fields[k]}」的圖片原始文字。完整抄錄；不要換算、不要四捨五入、不要猜。看不到填「未辨識」。`};
+ return p;
+}
+function makeSchema(count){
+ const properties={},required=[];
+ for(let i=1;i<=count;i++){
+   const key=`image_${i}`,keys=expected[key]||Object.keys(fields);
+   properties[key]={type:"object",additionalProperties:false,properties:propsFor(keys),required:keys};
+   required.push(key);
+ }
+ return {type:"object",additionalProperties:false,properties,required};
+}
+const prompt=`你是楓之谷角色數值截圖的精確抄錄器。
+只做「圖片→數值」，不要自己做健檢。
+嚴格規則：
+1. 依照每張圖片指定欄位逐項抄錄。
+2. 寧可「未辨識」，也不要猜。
+3. 完整保留數字、逗號、小數、%、秒、萬、億。
+4. 例如「696%」絕不能抄成「69%」。
+5. 例如「3億1396萬」與「3189萬8075」必須完整保留。
+6. 圖2與圖3重複出現的欄位，兩張都重新讀取，不要複製。
+7. image_1/image_2/image_3 必須嚴格對應上傳順序。`;
+
+const fileInput=document.getElementById("files"),previews=document.getElementById("previews"),fileInfo=document.getElementById("fileInfo");
+fileInput.addEventListener("change",()=>{
+ const fs=[...fileInput.files];previews.innerHTML="";
+ fileInfo.textContent=fs.length?`已選擇 ${fs.length} 張圖片；請依照角色面板順序選取。`:"請一次選取 3 張角色數值截圖。";
+ fs.forEach((f,i)=>{
+   const box=document.createElement("div"),lab=document.createElement("b"),img=document.createElement("img");
+   lab.textContent=`圖 ${i+1}｜${f.name}`;img.className="preview";img.src=URL.createObjectURL(f);box.append(lab,img);previews.appendChild(box);
+ });
+});
+function dataURL(f){return new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=no;r.readAsDataURL(f)})}
+function num(s){if(s==null||s==="未辨識")return null;let x=String(s).replace(/,/g,"").replace(/%|秒/g,"").trim();
+ if(/億/.test(x)){const m=x.match(/^([\d.]+)億(.*)萬?$/);if(m)return parseFloat(m[1])*1e8+(m[2]?parseFloat(m[2])*1e4:0)}
+ if(/萬/.test(x)){const m=x.match(/^([\d.]+)萬(.*)$/);if(m)return parseFloat(m[1])*1e4+(m[2]?parseFloat(m[2]):0)}
+ const n=parseFloat(x.replace(/[^\d.-]/g,""));return Number.isFinite(n)?n:null}
+function pct(s){return num(s)}
+function v(obj,k){return obj?.[k]??"未辨識"}
+function allImages(data){return Object.keys(data).sort().map(k=>data[k])}
+
+function addMetric(label,value,status=""){
+ return `<div class="metric"><span>${label}</span><b>${value}</b>${status?`<small>${status}</small>`:""}</div>`
+}
+
+function roundTens(x){
+  return Math.round(x/10)*10;
+}
+function fmtPct(x, digits=1){
+  return Number.isFinite(x) ? `${x.toFixed(digits)}%` : "未辨識";
+}
+function statusClass(status){
+  return status==="good"?"ok":status==="warn"?"warn":status==="bad"?"bad":"";
+}
+function statusIcon(status){
+  return status==="good"?"✓":status==="warn"?"△":status==="bad"?"✕":"";
+}
+function recommendationCard(title, value, baseline, status, detail){
+  return `<div class="metric ${statusClass(status)}">
+    <span>${title}</span>
+    <b>${value}</b>
+    <small>${statusIcon(status)} ${detail}${baseline?`｜基準 ${baseline}`:""}</small>
+  </div>`;
+}
+function addRule(rows,title,actual,baseline,status,detail,recommendation=""){
+  rows.push(`<tr>
+    <td><b>${title}</b></td>
+    <td>${actual}</td>
+    <td>${baseline||"—"}</td>
+    <td class="${statusClass(status)}">${statusIcon(status)} ${detail}</td>
+    <td>${recommendation||"—"}</td>
+  </tr>`);
+}
+function compareToBaseline(actual, baseline){
+  if(actual===null || baseline===null) return "unknown";
+  if(actual < baseline) return "bad";
+  return "good";
+}
+function healthCheck(data,mode){
+  const imgs=allImages(data), a=imgs[0]||{}, b=imgs[1]||{}, c=imgs[2]||{};
+  const relicCycle=document.getElementById("relicCycle").checked;
+
+  const crit=pct(v(a,"crit_rate"));
+  const critD=pct(v(a,"crit_damage"));
+  const asp=pct(v(a,"attack_speed"));
+  const pen=pct(v(b,"defense_penetration"));
+  const final=pct(v(c,"final_damage"));
+  const max=pct(v(b,"max_damage_multiplier"));
+  const min=pct(v(b,"min_damage_multiplier"));
+  const boss=pct(v(b,"boss_damage"));
+  const normal=pct(v(b,"normal_monster_damage"));
+  const hit=pct(v(b,"hit"));
+  const eva=pct(v(b,"evasion"));
+  const basic=pct(v(b,"basic_attack_damage"));
+  const skill=pct(v(b,"skill_damage"));
+  const attr=pct(v(a,"attribute_ratio_damage"));
+  const dmg=pct(v(b,"damage"));
+  const mainStat=pct(v(c,"main_stat_per_4_levels"));
+
+  let rows=[];
+  let recs=[];
+  const addRec=(priority,title,text)=>{
+    recs.push(`<div class="rec ${priority}"><b>${title}</b><span>${text}</span></div>`);
+  };
+
+  // 1) Crit rate
+  const critBase=relicCycle?140:100;
+  let critStatus="unknown", critDetail="未辨識";
+  if(crit!==null){
+    critStatus=crit>=critBase?"good":"bad";
+    if(relicCycle){
+      critDetail=crit>=140?"達到140%基準":"未達140%基準";
+    }else{
+      critDetail=crit>=100
+        ? (crit>100 ? "達到100%基準｜<span class='overflow-warning'><span class='triangle'>▲</span>數值溢出</span>" : "達到100%基準")
+        : "未達100%基準";
+    }
+  }
+  addRule(rows,"暴擊率",v(a,"crit_rate"),`${critBase}%`,critStatus,critDetail,
+    critStatus==="bad"?`建議提升至 ${critBase}%`:"—");
+
+  // 2) Attack speed
+  let aspStatus="unknown",aspDetail="未辨識";
+  if(asp!==null){
+    if(asp>=125){aspStatus="good";aspDetail="達到上限";}
+    else if(asp>=84){aspStatus="good";aspDetail="達到標準";}
+    else {aspStatus="bad";aspDetail="低於標準 84%";}
+  }
+  addRule(rows,"攻擊速度",v(a,"attack_speed"),"84% 標準 / 125% 上限",aspStatus,aspDetail,
+    aspStatus==="bad"?"建議提升至 84% 以上":"—");
+
+  // 3) Defense penetration
+  let penStatus="unknown",penDetail="未辨識";
+  if(pen!==null){
+    if(pen>=30){penStatus="good";penDetail=pen>=50?"已達較高區間":"已達建議區間";}
+    else {penStatus="bad";penDetail="低於 30% 建議區間";}
+  }
+  addRule(rows,"防禦穿透力",v(b,"defense_penetration"),"30%～50% 建議",penStatus,penDetail,
+    penStatus==="bad"?"建議優先提升":"—");
+
+  // 4) Final damage
+  addRule(rows,"最終傷害",v(c,"final_damage"),"越高越好","good","屬於越高越好的數值","—");
+
+  // 5) Basic attack : skill = 1 : 1
+  if(basic!==null && skill!==null){
+    const avg=(basic+skill)/2;
+    const diffPct=avg>0?Math.abs(basic-skill)/avg*100:null;
+    const status=diffPct!==null && diffPct<=10?"good":"warn";
+    addRule(rows,"基本攻擊傷害 : 技能傷害",`${basic}% : ${skill}%`,"1 : 1",status,
+      diffPct!==null ? (diffPct<=10?`兩者差距 ${diffPct.toFixed(1)}%，在 10% 容許範圍內`:`兩者差距 ${diffPct.toFixed(1)}%，超過 10% 容許範圍`) : "無法判定",
+      status==="warn"?(basic<skill?"基本攻擊傷害偏低":"技能傷害偏低"):"—");
+  }
+
+  // 6) Attribute proportional damage : damage = 1 : 1
+  if(attr!==null && dmg!==null){
+    const avg=(attr+dmg)/2;
+    const diffPct=avg>0?Math.abs(attr-dmg)/avg*100:null;
+    const status=diffPct!==null && diffPct<=10?"good":"warn";
+    addRule(rows,"屬性比例傷害 : 傷害",`${attr}% : ${dmg}%`,"1 : 1",status,
+      diffPct!==null ? (diffPct<=10?`兩者差距 ${diffPct.toFixed(1)}%，在 10% 容許範圍內`:`兩者差距 ${diffPct.toFixed(1)}%，超過 10% 容許範圍`) : "無法判定",
+      status==="warn"?(attr<dmg?"屬性比例傷害偏低":"傷害偏低"):"—");
+  }
+
+  // 7) Core average by use case
+  let primaryAvg=null, primaryLabel="", primaryValues="", fourAvg=null;
+  if(mode==="mobs" && critD!==null && normal!==null && max!==null){
+    primaryAvg=(critD+normal+max)/3;
+    primaryLabel="小怪三項平均基準";
+    primaryValues=`暴傷 ${critD}%／一般傷 ${normal}%／最大傷 ${max}%`;
+  }
+  if(mode==="boss" && critD!==null && boss!==null && max!==null){
+    primaryAvg=(critD+boss+max)/3;
+    primaryLabel="BOSS 三項平均基準";
+    primaryValues=`暴傷 ${critD}%／BOSS傷 ${boss}%／最大傷 ${max}%`;
+  }
+  if(mode==="both" && critD!==null && max!==null){
+    // BOSS & 小怪保留兩個基準：核心「暴傷+最大傷」平均，以及四項平均。
+    primaryAvg=(critD+max)/2;
+    primaryLabel="BOSS & 小怪核心平均基準";
+    primaryValues=`暴傷 ${critD}%／最大傷 ${max}%`;
+  }
+  if(mode==="pvp_hit" || mode==="pvp_evasion"){
+    if(critD!==null && max!==null){
+      primaryAvg=(critD+max)/2;
+      primaryLabel="PVP 暴傷／最大傷平均基準";
+      primaryValues=`暴傷 ${critD}%／最大傷 ${max}%`;
+    }
+  }
+
+  if(primaryAvg!==null){
+    const baseline=primaryAvg;
+    const avgStatus="good";
+    if(mode!=="both"){
+      addRule(rows,primaryLabel,fmtPct(primaryAvg),"三項／四項平均值",avgStatus,
+        primaryValues, "低於基準的項目優先補強");
+    }
+    addRec("info","這個平均值是做什麼的？",`把這個情況最重要的 ${mode==="mobs"?"3":mode==="boss"?"3":mode==="both"?"4":"2"} 個數值放在一起取平均，得到一個「配置基準」。它不是要求每個數值都一定要達到 ${fmtPct(baseline)}；而是用來比較彼此高低，找出「哪個數值明顯偏低、最值得優先補強」。`);
+  }
+
+  // BOSS & 小怪的第二基準：四項平均。
+  let bothFourAvg=null;
+  if(mode==="both" && critD!==null && max!==null && boss!==null && normal!==null){
+    bothFourAvg=(critD+max+boss+normal)/4;
+    // 四項平均已經在上方「平均基準值」區塊呈現，詳細列表不再重複。
+  }
+
+  // 8) Individual damage components against average baseline
+  if(primaryAvg!==null && (mode==="mobs" || mode==="boss" || mode==="both")){
+    const componentList=[];
+    componentList.push(["暴擊傷害",critD]);
+    if(mode==="mobs") componentList.push(["一般怪物傷害",normal]);
+    if(mode==="boss") componentList.push(["BOSS怪物傷害",boss]);
+    if(mode==="both"){
+      componentList.push(["BOSS怪物傷害",boss]);
+      componentList.push(["一般怪物傷害",normal]);
+    }
+    componentList.push(["最大傷害倍率",max]);
+
+    for(const [label,val] of componentList){
+      if(val!==null){
+        const status=val>=primaryAvg?"good":"bad";
+        addRule(rows,label,fmtPct(val),fmtPct(roundTens(primaryAvg)),status,
+          val>=primaryAvg?"高於／達到平均基準":"低於平均基準",
+          val<primaryAvg?"建議優先補強":"—");
+      }
+    }
+
+    // Minimum damage baseline = average - 50%
+    const minReference=(mode==="both" && bothFourAvg!==null)?bothFourAvg:primaryAvg;
+    const minBase=minReference-50;
+    if(min!==null){
+      const status=min>=minBase?"good":"bad";
+      addRule(rows,"最小傷害倍率",fmtPct(min),fmtPct(minBase),status,
+        min>=minBase?"達到「平均基準 − 50%」":"低於「平均基準 − 50%」",
+        min<minBase?"建議提升最小傷害倍率":"—");
+    }
+  }
+
+  // 9) BOSS & mobs: if four-term average cannot be met, recommend BOSS/normal average.
+  if(mode==="both" && boss!==null && normal!==null){
+    const ratioAvg=(boss+normal)/2;
+    const diffPct=ratioAvg>0?Math.abs(boss-normal)/ratioAvg*100:null;
+    const status=diffPct!==null && diffPct<=10?"good":"warn";
+    let detail="", recommendation="—";
+    if(status==="good"){
+      detail=`兩者差距 ${diffPct.toFixed(1)}%，在 10% 容許範圍內`;
+    }else if(normal < boss){
+      detail=`一般怪物傷害相對不足，兩者差距 ${diffPct.toFixed(1)}%`;
+      recommendation="建議優先提升一般怪物傷害";
+    }else{
+      detail=`BOSS傷害相對不足，兩者差距 ${diffPct.toFixed(1)}%`;
+      recommendation="建議優先提升 BOSS傷害";
+    }
+    addRule(rows,"BOSS傷害／一般怪物傷害",`${boss}% : ${normal}%`, "1 : 1", status,
+      detail, recommendation);
+  }
+
+  // 10) PVP hit/evasion
+  if(mode==="pvp_hit" || mode==="pvp_evasion"){
+    if(hit!==null && eva!==null){
+      const status=mode==="pvp_hit" ? (hit>=eva?"good":"bad") : (eva>=hit?"good":"bad");
+      addRule(rows,"命中／迴避",`${hit} / ${eva}`,"PVP 1 : 1",status,
+        mode==="pvp_hit"
+          ? (hit>=eva?"命中 ≥ 迴避":"命中 < 迴避")
+          : (eva>=hit?"迴避 ≥ 命中":"迴避 < 命中"),
+        status==="bad"?(mode==="pvp_hit"?"建議提升命中":"建議提升迴避"):"—");
+    }
+  }
+
+  // 11) Skill level 3rd : 4th = 1 : 1, if both available.
+  const j3=pct(v(c,"job3_skill_level")),j4=pct(v(c,"job4_skill_level"));
+  if(j3!==null && j4!==null){
+    const avg=(j3+j4)/2;
+    const diffPct=avg>0?Math.abs(j3-j4)/avg*100:null;
+    const status=diffPct!==null && diffPct<=10?"good":"warn";
+    addRule(rows,"3轉 : 4轉技能等級",`${j3} : ${j4}`,"1 : 1",status,
+      diffPct!==null ? (diffPct<=10?`兩者差距 ${diffPct.toFixed(1)}%，在 10% 容許範圍內`:`兩者差距 ${diffPct.toFixed(1)}%，超過 10% 容許範圍`) : "無法判定",
+      status==="warn"?"建議讓兩者更接近":"—");
+  }
+
+  // Render summary cards
+  let top="";
+  top+="<div class='result-grid'>";
+  top+=recommendationCard("暴擊率",v(a,"crit_rate"),`${critBase}%`,critStatus,critDetail);
+  top+=recommendationCard("攻擊速度",v(a,"attack_speed"),"84%",aspStatus,aspDetail);
+  top+=recommendationCard("防禦穿透",v(b,"defense_penetration"),"30%～50%",penStatus,penDetail);
+  top+=recommendationCard("最終傷害",v(c,"final_damage"),"越高越好","good","越高越好");
+  top+="</div><br>";
+
+  let baselineHtml="";
+  if(primaryAvg!==null){
+    const selectedText =
+      mode==="mobs" ? "只有小怪" :
+      mode==="boss" ? "只有 BOSS" :
+      mode==="both" ? "BOSS & 小怪" :
+      mode==="pvp_hit" ? "PVP｜命中流" :
+      "PVP｜迴避流";
+
+    let calcItems=[];
+    if(mode==="mobs"){
+      calcItems=[
+        ["暴擊傷害",critD],
+        ["一般傷害",normal],
+        ["最大傷害",max]
+      ];
+    }else if(mode==="boss"){
+      calcItems=[
+        ["暴擊傷害",critD],
+        ["BOSS傷害",boss],
+        ["最大傷害",max]
+      ];
+    }else if(mode==="both"){
+      calcItems=[
+        ["暴擊傷害",critD],
+        ["BOSS傷害",boss],
+        ["一般傷害",normal],
+        ["最大傷害",max]
+      ];
+    }else{
+      calcItems=[
+        ["暴擊傷害",critD],
+        ["最大傷害",max]
+      ];
+    }
+
+    const visibleItems=calcItems.filter(x=>x[1]!==null);
+    const itemListHtml=visibleItems.map(([label,val])=>{
+      let statusClassName="baseline-neutral";
+      let statusText="與平均基準值相同";
+      if(val < primaryAvg){
+        statusClassName="baseline-up";
+        statusText="需要提升";
+      }else if(val > primaryAvg){
+        statusClassName="baseline-down";
+        statusText="需要下降";
+      }
+      return `<div class="baseline-item ${statusClassName}">
+        <span>${label}</span>
+        <strong>${fmtPct(val)}</strong>
+        <em>${statusText}</em>
+      </div>`;
+    }).join("");
+
+    const formulaItems=visibleItems.map(([label,val])=>`${label} ${fmtPct(val)}`).join(" + ");
+    const divisor=visibleItems.length;
+    const formula=`( ${formulaItems} ) ÷ ${divisor}`;
+
+    baselineHtml=`<div class="baseline-box">
+      <div class="baseline-title">
+        本次針對「${selectedText}」這個情況的
+        <span>「平均基準值」</span>
+      </div>
+
+      <div class="baseline-value">${fmtPct(primaryAvg)}</div>
+
+      <div class="baseline-subtitle">目前拿來計算的數值</div>
+      <div class="baseline-items">${itemListHtml}</div>
+
+
+      <div class="explain-row">
+        <div class="explain-label">怎麼算？</div>
+        <div class="explain-content formula-text">${formula}</div>
+      </div>
+
+      <div class="explain-row">
+        <div class="explain-label">這是做什麼的？</div>
+        <div class="explain-content">
+          依照你選擇的情況，把該情況需要比較的核心數值放在一起取平均，
+          得到一個「平均基準值」。
+          <strong>這不是要求每一項都達到這個數字。</strong>
+          <br>
+          而是用來比較目前各項數值的高低；
+          <strong>低於平均基準值的項目，就是目前配置相對偏低、可以優先補強的項目。</strong>
+        </div>
+      </div>
+
+      <div class="tolerance-box">
+        <strong>1 : 1 配置判定</strong>
+        <span>採用「±10% 容許誤差」：兩者差距在 10% 以內，視為配置均衡。</span>
+      </div>
+    </div>`;
+  }
+  const recHtml="";
+  const table=`<div style="overflow:auto"><table><thead><tr><th>項目</th><th>實際值</th><th>基準</th><th>判讀</th><th>建議</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
+  document.getElementById("health").innerHTML=top+baselineHtml+recHtml+table;
+}
+function renderValues(data){
+ let html="";
+ for(const [ik,obj] of Object.entries(data)){
+   html+=`<h3>${ik}</h3><div class="result-grid">`;
+   for(const [k,val] of Object.entries(obj))html+=addMetric(fields[k]||k,val);
+   html+="</div><br>";
+ }
+ document.getElementById("values").innerHTML=html;
+}
+
+async function run(){
+ const fs=[...fileInput.files],status=document.getElementById("status"),btn=document.getElementById("run");
+ if(fs.length!==3){alert("請一次選擇 3 張角色數值截圖");return}
+ btn.disabled=true;
+ status.textContent="正在送出 3 張圖片給後端 GPT Vision……";
+ try{
+   const images=await Promise.all(fs.map(dataURL));
+   const payload={
+     case:document.getElementById("useCase").value,
+     relicCycle:document.getElementById("relicCycle").checked,
+     images
+   };
+   const r=await fetch("/api/vision",{
+     method:"POST",
+     headers:{"Content-Type":"application/json"},
+     body:JSON.stringify(payload)
+   });
+   const d=await r.json();
+   if(!r.ok)throw Error(d.error||"後端辨識失敗");
+   const data=d.data;
+   document.getElementById("raw").textContent=JSON.stringify(data,null,2);
+   renderValues(data);
+   healthCheck(data,document.getElementById("useCase").value);
+   status.innerHTML=`<span class="ok">完成</span>${d.usage?`｜input ${d.usage.input_tokens} / output ${d.usage.output_tokens}`:""}`;
+ }catch(e){
+   console.error("Backend Vision error:",e);
+   status.innerHTML=`<span class="bad">失敗：${e.message}</span>`;
+   document.getElementById("health").innerHTML="辨識失敗，請查看上方錯誤。";
+ }finally{
+   btn.disabled=false;
+ }
+}
+document.getElementById("run").onclick=run;
+</script>
+</body>
+</html>

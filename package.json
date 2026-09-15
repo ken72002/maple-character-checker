@@ -1,0 +1,9 @@
+{
+  "private": true,
+  "scripts": {
+    "build": "exit 0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.68.0"
+  }
+}
