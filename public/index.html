@@ -45,6 +45,20 @@ pre{white-space:pre-wrap;word-break:break-word;background:#111;color:#eee;paddin
 .rec b{min-width:90px}.rec span{color:#4c535c}.rec.bad{border-left-color:#d64545}.rec.warn{border-left-color:#c68a00}.rec.good{border-left-color:#2e8b57}
 td.ok{color:#087f23}td.warn{color:#9a6200}td.bad{color:#b00020}small{display:block;margin-top:4px;color:#69717d}
 @media(max-width:850px){.grid{grid-template-columns:1fr}.result-grid{grid-template-columns:repeat(2,1fr)}} 
+
+.step2-action{
+  display:flex;
+  justify-content:flex-start;
+  align-items:center;
+  gap:10px;
+  margin:18px 0 10px;
+}
+.step2-action button{
+  margin:0;
+}
+.step2-action .muted{
+  margin-left:0 !important;
+}
 </style>
 
 <style>
@@ -86,8 +100,9 @@ td.ok{color:#087f23}td.warn{color:#9a6200}td.bad{color:#b00020}small{display:blo
 </div>
 <div id="previews" class="grid" style="margin-top:14px"></div>
 <br>
+<div class="step2-action">
 <button id="run">開始 GPT Vision 辨識</button>
-<span id="status" class="muted" style="margin-left:10px"></span>
+<span id="status" class="muted"></span>
 </div>
 
 <div class="card">
