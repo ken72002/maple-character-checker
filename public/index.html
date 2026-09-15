@@ -57,7 +57,7 @@ td.ok{color:#087f23}td.warn{color:#9a6200}td.bad{color:#b00020}small{display:blo
 <div class="wrap">
 <div class="card hero">
 <h1>楓之谷角色數值健檢 V6.0</h1>
-<div class="muted">GPT Vision 負責「看圖抄數值」；JavaScript 負責「固定規則健檢」。本版先以 API Key 直連測試，尚未加入正式後端。</div>
+<div class="muted">GPT Vision 負責「看圖抄數值」；JavaScript 負責「固定規則健檢」。</div>
 </div>
 
 <div class="card">
@@ -78,12 +78,6 @@ td.ok{color:#087f23}td.warn{color:#9a6200}td.bad{color:#b00020}small{display:blo
 
 <div class="card">
 <h2>STEP 2｜上傳角色數值截圖</h2>
-<div class="grid">
-<div>
-<label>GPT Vision</label>
-
-</div>
-
 <div>
 <label>圖片</label>
 <input id="files" type="file" accept="image/*" multiple>
@@ -107,10 +101,6 @@ td.ok{color:#087f23}td.warn{color:#9a6200}td.bad{color:#b00020}small{display:blo
 <div id="values">尚未執行。</div>
 </div>
 
-<div class="card">
-<h2>辨識 JSON</h2>
-<pre id="raw">尚未執行。</pre>
-</div>
 </div>
 
 <script>
@@ -552,7 +542,6 @@ async function run(){
    const d=await r.json();
    if(!r.ok)throw Error(d.error||"後端辨識失敗");
    const data=d.data;
-   document.getElementById("raw").textContent=JSON.stringify(data,null,2);
    renderValues(data);
    healthCheck(data,document.getElementById("useCase").value);
    status.innerHTML=`<span class="ok">完成</span>${d.usage?`｜input ${d.usage.input_tokens} / output ${d.usage.output_tokens}`:""}`;
