@@ -59,6 +59,27 @@ function makeSchema(byImage=EXPECTED){
   return {type:"object",additionalProperties:false,properties,required};
 }
 
+const PROMPT = `你是楓之谷角色數值截圖的精確抄錄器。
+只做「圖片→數值」，不要自己做健檢。
+嚴格規則：
+1. 依照每張圖片指定欄位逐項抄錄。
+2. 寧可「未辨識」，也不要猜。
+3. 完整保留數字、逗號、小數、%、秒、萬、億。
+4. 例如「696%」絕不能抄成「69%」。
+5. 例如「3億1396萬」與「3189萬8075」必須完整保留。
+6. 圖2與圖3重複出現的欄位，兩張都重新讀取，不要複製。
+7. image_1/image_2/image_3 必須嚴格對應上傳順序。`;
+
+const RETRY_PROMPT = `你是楓之谷角色數值截圖的精確補漏器。
+這一次只重新辨識指定的少數欄位，不要處理其他欄位。
+嚴格規則：
+1. 逐項確認圖片上的欄位名稱，再讀取其右側對應數值。
+2. 優先仔細檢查數字、小數點、%、秒、萬、億與逗號。
+3. 寧可「未辨識」，也不要猜。
+4. 完整抄錄圖片原始文字，不要換算、不要四捨五入。
+5. 如果同一欄位在圖片中確實可見，即使字體較小，也請仔細放大並重新確認。
+6. image_1/image_2/image_3 必須嚴格對應上傳順序。`;
+
 function jsonResponse(body, status=200){
   return new Response(JSON.stringify(body),{
     status,
