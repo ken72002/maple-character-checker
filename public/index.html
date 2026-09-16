@@ -104,6 +104,60 @@ td.ok{color:#087f23}td.warn{color:#9a6200}td.bad{color:#b00020}small{display:blo
   .crop-dialog-actions{flex-direction:column;gap:8px}.crop-dialog-actions button{width:100%}.crop-hint{font-size:12px;line-height:1.65}
 }
 @media (max-width:380px){.wrap{padding:8px}.card{padding:13px}.hero{padding:15px 13px}h1{font-size:20px}.baseline-items{grid-template-columns:1fr}}
+/* V6.4 mobile health-check table: turn the 5-column table into readable cards */
+@media (max-width: 700px){
+  #health > div[style*="overflow:auto"]{overflow:visible !important}
+  #health table,#health tbody,#health tr,#health td{display:block;width:100%}
+  #health thead{display:none}
+  #health tbody tr{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 14px;
+    margin:0 0 12px;
+    padding:13px 13px 10px;
+    border:1px solid #e2e5e9;
+    border-radius:12px;
+    background:#fff;
+  }
+  #health tbody td{
+    border:0;
+    padding:6px 0;
+    min-width:0;
+    font-size:14px;
+    line-height:1.55;
+    overflow-wrap:anywhere;
+  }
+  #health tbody td::before{
+    content:attr(data-label);
+    display:block;
+    margin-bottom:2px;
+    font-size:11px;
+    line-height:1.3;
+    font-weight:700;
+    color:#7a828c;
+  }
+  #health tbody td.rule-item{
+    grid-column:1 / -1;
+    padding:0 0 9px;
+    margin-bottom:3px;
+    border-bottom:1px solid #edf0f3;
+  }
+  #health tbody td.rule-item::before{display:none}
+  #health tbody td.rule-item b{font-size:16px;line-height:1.45}
+  #health tbody td:nth-child(2),#health tbody td:nth-child(3){padding-top:9px}
+  #health tbody td:nth-child(4),#health tbody td:nth-child(5){
+    grid-column:1 / -1;
+    padding-top:8px;
+  }
+  #health tbody td:nth-child(4){
+    margin-top:3px;
+    padding:9px 10px;
+    border-radius:8px;
+    background:#fafbfc;
+  }
+  #health tbody td:nth-child(5){padding-bottom:2px}
+}
+
 </style>
 </head>
 <body>
@@ -454,11 +508,11 @@ function recommendationCard(title, value, baseline, status, detail){
 }
 function addRule(rows,title,actual,baseline,status,detail,recommendation=""){
   rows.push(`<tr>
-    <td><b>${title}</b></td>
-    <td>${actual}</td>
-    <td>${baseline||"—"}</td>
-    <td class="${statusClass(status)}">${statusIcon(status)} ${detail}</td>
-    <td>${recommendation||"—"}</td>
+    <td data-label="項目" class="rule-item"><b>${title}</b></td>
+    <td data-label="實際值">${actual}</td>
+    <td data-label="基準">${baseline||"—"}</td>
+    <td data-label="判讀" class="${statusClass(status)}">${statusIcon(status)} ${detail}</td>
+    <td data-label="建議">${recommendation||"—"}</td>
   </tr>`);
 }
 function compareToBaseline(actual, baseline){
