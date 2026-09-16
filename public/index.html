@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>楓之谷角色數值健檢 V6.2｜GPT Vision</title>
+<title>楓之谷角色數值健檢 V6.3｜GPT Vision</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#f4f6f8;color:#222;font-family:Arial,"Noto Sans TC",sans-serif}
 .wrap{max-width:1180px;margin:auto;padding:24px}.card{background:#fff;border-radius:16px;padding:20px;margin:0 0 18px;box-shadow:0 3px 16px #0000000d}
@@ -91,7 +91,7 @@ td.ok{color:#087f23}td.warn{color:#9a6200}td.bad{color:#b00020}small{display:blo
 <body>
 <div class="wrap">
 <div class="card hero">
-<h1>楓之谷角色數值健檢 V6.2</h1>
+<h1>楓之谷角色數值健檢 V6.3</h1>
 <div class="muted">GPT Vision 負責「看圖抄數值」；JavaScript 負責「固定規則健檢」。</div>
 </div>
 
@@ -785,13 +785,57 @@ function mergeDuplicateFields(data){
  return data;
 }
 
+function loadDataUrlImage(url){
+ return new Promise((resolve,reject)=>{
+   const img=new Image();
+   img.onload=()=>resolve(img);
+   img.onerror=()=>reject(new Error("無法讀取處理後圖片"));
+   img.src=url;
+ });
+}
+
+async function makeTargetedRetryCrops(images,missing){
+ const out=[];
+ const grouped={image_1:[],image_2:[],image_3:[]};
+ for(const m of missing)grouped[m.image].push(m);
+ for(let i=1;i<=3;i++){
+   if(!grouped[`image_${i}`].length)continue;
+   const img=await loadDataUrlImage(images[i-1]);
+   const list=expected[`image_${i}`];
+   const n=list.length;
+   // 處理後圖片已是屬性面板，依固定欄位順序取「單列附近」的局部圖。
+   // 保留上下鄰近區域，避免文字稍微偏移時被切掉。
+   const headerRatio=0.105, contentTop=img.naturalHeight*headerRatio;
+   const contentH=img.naturalHeight-contentTop;
+   const rowH=contentH/n;
+   for(const m of grouped[`image_${i}`]){
+     const idx=list.indexOf(m.field);
+     if(idx<0)continue;
+     const center=contentTop+(idx+0.5)*rowH;
+     const cropH=Math.min(img.naturalHeight,Math.max(rowH*2.15,90));
+     let y=center-cropH/2;
+     y=Math.max(0,Math.min(img.naturalHeight-cropH,y));
+     const padX=Math.max(4,img.naturalWidth*0.015);
+     const x=padX,w=img.naturalWidth-padX*2;
+     const canvas=document.createElement("canvas");
+     const scale=4;
+     canvas.width=Math.round(w*scale);canvas.height=Math.round(cropH*scale);
+     const ctx=canvas.getContext("2d");
+     ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality="high";
+     ctx.drawImage(img,x,y,w,cropH,0,0,canvas.width,canvas.height);
+     const dataUrl=canvas.toDataURL("image/png");
+     out.push({image:`image_${i}`,field:m.field,label:m.label,image_url:dataUrl});
+   }
+ }
+ return out;
+}
+
 async function retryMissing(images,missing){
  if(!missing.length)return {data:{},usage:null};
- const retryByImage={image_1:[],image_2:[],image_3:[]};
- for(const m of missing)retryByImage[m.image].push(m.field);
+ const retryCrops=await makeTargetedRetryCrops(images,missing);
  const r=await fetch("/api/vision",{
    method:"POST",headers:{"Content-Type":"application/json"},
-   body:JSON.stringify({mode:"retry",images,retryByImage})
+   body:JSON.stringify({mode:"targeted_retry",retryCrops})
  });
  const d=await r.json();if(!r.ok)throw Error(d.error||"補漏辨識失敗");
  return d;
@@ -811,7 +855,7 @@ async function run(){
    let usageIn=d.usage?.input_tokens||0,usageOut=d.usage?.output_tokens||0;
    let missing=collectMissing(data);
    if(missing.length){
-     status.textContent=`第 1 階段完成，發現 ${missing.length} 個尚未辨識欄位，正在進行第 2 階段補漏辨識……`;
+     status.textContent=`第 1 階段完成，發現 ${missing.length} 個尚未辨識欄位，正在製作局部放大圖並進行第 2 階段補漏辨識……`;
      const retry=await retryMissing(images,missing);
      for(let i=1;i<=3;i++)for(const k of expected[`image_${i}`]){
        const val=retry.data?.[`image_${i}`]?.[k];

@@ -80,6 +80,16 @@ const RETRY_PROMPT = `你是楓之谷角色數值截圖的精確補漏器。
 5. 如果同一欄位在圖片中確實可見，即使字體較小，也請仔細放大並重新確認。
 6. image_1/image_2/image_3 必須嚴格對應上傳順序。`;
 
+const TARGETED_RETRY_PROMPT = `你是楓之谷角色數值的精確補漏辨識器。
+這些圖片不是完整面板，而是針對單一欄位擷取並放大的局部圖片。
+每張圖片只需要辨識它指定的那一個欄位。
+嚴格規則：
+1. 先確認圖片中的欄位名稱，再讀取該欄位右側的數值。
+2. 這張圖片只回答指定欄位，不要把鄰近欄位的數值當成答案。
+3. 仔細辨認數字、小數點、%、秒、萬、億與逗號。
+4. 完整抄錄圖片原始文字，不要換算、不要四捨五入、不要猜。
+5. 如果指定欄位清楚可見，請務必給出圖片中的原始文字；只有真的看不到或無法判讀時才填「未辨識」。`;
+
 function jsonResponse(body, status=200){
   return new Response(JSON.stringify(body),{
     status,
@@ -94,15 +104,60 @@ export async function handleVision(request, env){
     }
 
     const body=await request.json();
-    const images=body?.images;
-    if(!Array.isArray(images)||images.length!==3){
-      return jsonResponse({error:"請一次提供 3 張圖片。"},400);
-    }
-    if(images.some(x=>typeof x!=="string"||!x.startsWith("data:image/"))){
-      return jsonResponse({error:"圖片格式不正確。"},400);
+    const mode=body?.mode||"initial";
+
+    // 第二階段採用「局部列裁切＋再次放大」；不要再把完整面板原封不動重送一次。
+    if(mode==="targeted_retry"){
+      const crops=Array.isArray(body?.retryCrops)?body.retryCrops:[];
+      if(!crops.length)return jsonResponse({data:{image_1:{},image_2:{},image_3:{}},usage:null},200);
+      const valid=[];
+      for(const crop of crops){
+        const image=crop?.image,field=crop?.field,url=crop?.image_url;
+        if(!/^image_[1-3]$/.test(image)||!FIELDS[field]||typeof url!=="string"||!url.startsWith("data:image/"))continue;
+        if(!EXPECTED[image].includes(field))continue;
+        valid.push({image,field,url});
+      }
+      if(!valid.length)return jsonResponse({data:{image_1:{},image_2:{},image_3:{}},usage:null},200);
+
+      const byImage={image_1:[],image_2:[],image_3:[]};
+      for(const c of valid)if(!byImage[c.image].includes(c.field))byImage[c.image].push(c.field);
+      const properties={},required=[];
+      for(const c of valid){
+        if(!properties[c.image])properties[c.image]={type:"object",additionalProperties:false,properties:{},required:[]};
+        properties[c.image].properties[c.field]={type:"string",description:`「${FIELDS[c.field]}」的局部放大圖片原始文字。完整抄錄；不要換算、不要四捨五入、不要猜；看不到才填「未辨識」。`};
+        if(!properties[c.image].required.includes(c.field))properties[c.image].required.push(c.field);
+      }
+      for(const k of ["image_1","image_2","image_3"]){
+        if(properties[k])required.push(k);
+      }
+
+      const content=[{type:"input_text",text:TARGETED_RETRY_PROMPT}];
+      for(const c of valid){
+        content.push({type:"input_text",text:`這是 ${c.image} 的「${FIELDS[c.field]}」局部放大圖。只辨識這一個欄位：${FIELDS[c.field]}。不要回答其他欄位。`});
+        content.push({type:"input_image",image_url:c.url,detail:"high"});
+      }
+      const apiBody={model:MODEL,input:[{role:"user",content}],text:{format:{type:"json_schema",name:"maple_character_targeted_retry_v1",strict:true,schema:{type:"object",additionalProperties:false,properties,required}}},store:false};
+      const controller=new AbortController();
+      const timer=setTimeout(()=>controller.abort(),120000);
+      let response;
+      try{
+        response=await fetch("https://api.openai.com/v1/responses",{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${env.OPENAI_API_KEY}`},body:JSON.stringify(apiBody),signal:controller.signal});
+      }finally{clearTimeout(timer);}
+      const raw=await response.json();
+      if(!response.ok)return jsonResponse({error:raw?.error?.message||"OpenAI API 請求失敗。",status:response.status},response.status);
+      let text=raw.output_text||"";
+      if(!text&&Array.isArray(raw.output))for(const item of raw.output)if(item?.type==="message"&&Array.isArray(item.content))for(const part of item.content)if(part?.type==="output_text"&&typeof part.text==="string")text+=part.text;
+      if(!text)return jsonResponse({error:"GPT 已回應，但找不到 JSON 輸出。"},502);
+      let data;
+      try{data=JSON.parse(text);}catch{return jsonResponse({error:"GPT 回傳內容不是有效 JSON。"},502);}
+      return jsonResponse({data,usage:raw.usage||null});
     }
 
-    const isRetry=body?.mode==="retry";
+    const images=body?.images;
+    if(!Array.isArray(images)||images.length!==3)return jsonResponse({error:"請一次提供 3 張圖片。"},400);
+    if(images.some(x=>typeof x!=="string"||!x.startsWith("data:image/")))return jsonResponse({error:"圖片格式不正確。"},400);
+
+    const isRetry=mode==="retry";
     let byImage=EXPECTED;
     if(isRetry){
       const requested=body?.retryByImage;
