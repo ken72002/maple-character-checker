@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>楓之谷角色數值健檢 V6.0｜GPT Vision</title>
+<title>楓之谷角色數值健檢 V6.2｜GPT Vision</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#f4f6f8;color:#222;font-family:Arial,"Noto Sans TC",sans-serif}
 .wrap{max-width:1180px;margin:auto;padding:24px}.card{background:#fff;border-radius:16px;padding:20px;margin:0 0 18px;box-shadow:0 3px 16px #0000000d}
@@ -67,12 +67,31 @@ td.ok{color:#087f23}td.warn{color:#9a6200}td.bad{color:#b00020}small{display:blo
 #prepare{min-width:220px}
 .prep-status{margin-top:8px}
 #status{display:inline-block;vertical-align:middle}
+
+/* 手動裁切 */
+.crop-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.crop-tools button{padding:8px 12px;font-size:13px}
+.crop-modal{position:fixed;inset:0;background:#0008;display:none;align-items:center;justify-content:center;z-index:9999;padding:18px}
+.crop-modal.open{display:flex}
+.crop-dialog{width:min(980px,96vw);max-height:94vh;overflow:auto;background:#fff;border-radius:16px;padding:18px;box-shadow:0 12px 40px #0005}
+.crop-dialog h3{margin-bottom:8px}
+.crop-canvas-wrap{position:relative;width:100%;height:min(66vh,620px);background:#17191d;border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center;touch-action:none}
+#cropCanvas{max-width:100%;max-height:100%;display:block}
+.crop-overlay{position:absolute;border:2px solid #fff;box-shadow:0 0 0 9999px #0007;cursor:move;touch-action:none}
+.crop-handle{position:absolute;width:14px;height:14px;background:#fff;border:2px solid #222;border-radius:3px;touch-action:none}
+.crop-handle.nw{left:-8px;top:-8px;cursor:nwse-resize}.crop-handle.n{left:50%;top:-8px;transform:translateX(-50%);cursor:ns-resize}.crop-handle.ne{right:-8px;top:-8px;cursor:nesw-resize}
+.crop-handle.e{right:-8px;top:50%;transform:translateY(-50%);cursor:ew-resize}.crop-handle.se{right:-8px;bottom:-8px;cursor:nwse-resize}.crop-handle.s{left:50%;bottom:-8px;transform:translateX(-50%);cursor:ns-resize}
+.crop-handle.sw{left:-8px;bottom:-8px;cursor:nesw-resize}.crop-handle.w{left:-8px;top:50%;transform:translateY(-50%);cursor:ew-resize}
+.crop-dialog-actions{display:flex;gap:10px;justify-content:flex-start;margin-top:12px}
+.crop-dialog-actions .secondary{background:#69717d}
+.crop-hint{font-size:13px;color:#69717d;line-height:1.7;margin-top:8px}
+.prep-card-note{margin-top:10px;padding:9px 11px;border-radius:9px;background:#f7f9fc;border:1px solid #e1e5eb;color:#626b76;font-size:13px;line-height:1.7}
 </style>
 </head>
 <body>
 <div class="wrap">
 <div class="card hero">
-<h1>楓之谷角色數值健檢 V6.0</h1>
+<h1>楓之谷角色數值健檢 V6.2</h1>
 <div class="muted">GPT Vision 負責「看圖抄數值」；JavaScript 負責「固定規則健檢」。</div>
 </div>
 
@@ -107,6 +126,7 @@ td.ok{color:#087f23}td.warn{color:#9a6200}td.bad{color:#b00020}small{display:blo
 <span id="status" class="muted"></span>
 </div>
 <div id="prepStatus" class="muted prep-status"></div>
+<div class="prep-card-note">自動裁切完成後，如果框選範圍不正確，可以在圖 1～圖 3 下方按「手動調整裁切」修正，再重新套用裁切＋放大。</div>
 
 <div class="card">
 <h2>STEP 3｜角色健檢</h2>
@@ -173,8 +193,16 @@ let processedFiles=null;
 
 function resetProcessed(){
  processedFiles=null;
+ cropStates=[null,null,null];
  prepStatus.textContent="";
 }
+
+let cropStates=[null,null,null];
+let cropEditorIndex=-1;
+let cropEditorImage=null;
+let cropEditorScale=1;
+let cropRect={x:0,y:0,w:1,h:1};
+let cropDrag=null;
 
 fileInput.addEventListener("change",()=>{
  const fs=[...fileInput.files];
@@ -203,8 +231,6 @@ function loadImage(file){
 }
 
 function detectPropertyPanel(img){
- // 先在原圖上找「中央、寬度較大的高亮區」，這正是角色屬性面板的白色內容區。
- // 不依賴固定座標，因此遊戲視窗位置或截圖尺寸改變時仍可工作。
  const maxW=1200, scale=Math.min(1,maxW/img.naturalWidth);
  const w=Math.max(1,Math.round(img.naturalWidth*scale));
  const h=Math.max(1,Math.round(img.naturalHeight*scale));
@@ -213,68 +239,50 @@ function detectPropertyPanel(img){
  ctx.drawImage(img,0,0,w,h);
  const data=ctx.getImageData(0,0,w,h).data;
  const gray=new Uint8Array(w*h);
- for(let i=0,p=0;i<gray.length;i++,p+=4){
-   gray[i]=Math.round(data[p]*.299+data[p+1]*.587+data[p+2]*.114);
- }
+ for(let i=0,p=0;i<gray.length;i++,p+=4)gray[i]=Math.round(data[p]*.299+data[p+1]*.587+data[p+2]*.114);
  const threshold=150;
  let best=null;
  const yStart=Math.floor(h*.15),yEnd=Math.floor(h*.85),yStep=Math.max(1,Math.floor(h/100));
  for(let y=yStart;y<yEnd;y+=yStep){
    let start=-1;
    for(let x=0;x<=w;x++){
-     const bright=x<w && gray[y*w+x]>=threshold;
-     if(bright && start<0) start=x;
-     if((!bright||x===w) && start>=0){
+     const bright=x<w&&gray[y*w+x]>=threshold;
+     if(bright&&start<0)start=x;
+     if((!bright||x===w)&&start>=0){
        const end=x-1,len=end-start+1,cx=(start+end)/2;
-       if(len>=w*.15 && len<=w*.75 && cx>w*.2 && cx<w*.8){
-         // 偏好更寬、且位於畫面中央的高亮區。
-         const centerPenalty=Math.abs(cx-w/2)/(w/2);
-         const score=len*(1-centerPenalty*.35);
-         if(!best||score>best.score) best={score,start,end,y};
+       if(len>=w*.15&&len<=w*.75&&cx>w*.2&&cx<w*.8){
+         const centerPenalty=Math.abs(cx-w/2)/(w/2),score=len*(1-centerPenalty*.35);
+         if(!best||score>best.score)best={score,start,end,y};
        }
        start=-1;
      }
    }
  }
- if(!best) return null;
+ if(!best)return null;
  const cx=Math.round((best.start+best.end)/2);
- let vStart=-1,vEnd=-1;
- let longest=null;
+ let vStart=-1,longest=null;
  for(let y=0;y<=h;y++){
-   const bright=y<h && gray[y*w+cx]>=threshold;
+   const bright=y<h&&gray[y*w+cx]>=threshold;
    if(bright&&vStart<0)vStart=y;
    if((!bright||y===h)&&vStart>=0){
      const end=y-1,len=end-vStart+1;
-     if(len>=h*.25 && vStart>h*.05 && end<h*.98){
-       if(!longest||len>longest.len)longest={len,start:vStart,end};
-     }
+     if(len>=h*.25&&vStart>h*.05&&end<h*.98){if(!longest||len>longest.len)longest={len,start:vStart,end};}
      vStart=-1;
    }
  }
- if(!longest) return null;
- // 垂直亮區容易被標題列/文字切斷，因此上下各補一段，完整保留整個屬性面板。
- const padX=Math.max(8,Math.round(w*.015));
- const padTop=Math.max(20,Math.round(h*.08));
- const padBottom=Math.max(8,Math.round(h*.015));
- const x0=Math.max(0,best.start-padX);
- const x1=Math.min(w-1,best.end+padX);
- const y0=Math.max(0,longest.start-padTop);
- const y1=Math.min(h-1,longest.end+padBottom);
- return {x:x0/scale,y:y0/scale,width:(x1-x0+1)/scale,height:(y1-y0+1)/scale,previewScale:scale};
+ if(!longest)return null;
+ const padX=Math.max(8,Math.round(w*.015)),padTop=Math.max(20,Math.round(h*.08)),padBottom=Math.max(8,Math.round(h*.015));
+ const x0=Math.max(0,best.start-padX),x1=Math.min(w-1,best.end+padX),y0=Math.max(0,longest.start-padTop),y1=Math.min(h-1,longest.end+padBottom);
+ return {x:x0/scale,y:y0/scale,width:(x1-x0+1)/scale,height:(y1-y0+1)/scale};
 }
 
-async function cropAndUpscale(file,index){
+async function cropAndUpscale(file,index,customCrop=null){
  const img=await loadImage(file);
- const crop=detectPropertyPanel(img);
- if(!crop) throw new Error(`圖 ${index+1} 找不到屬性面板，請確認截圖包含完整的白色屬性面板。`);
- const targetScale=3;
- const outW=Math.round(crop.width*targetScale);
- const outH=Math.round(crop.height*targetScale);
- const canvas=document.createElement("canvas");
- canvas.width=outW;canvas.height=outH;
- const ctx=canvas.getContext("2d");
- ctx.imageSmoothingEnabled=true;
- ctx.imageSmoothingQuality="high";
+ const crop=customCrop||detectPropertyPanel(img);
+ if(!crop)throw new Error(`圖 ${index+1} 找不到屬性面板，請改用「手動調整裁切」。`);
+ const targetScale=3,outW=Math.max(1,Math.round(crop.width*targetScale)),outH=Math.max(1,Math.round(crop.height*targetScale));
+ const canvas=document.createElement("canvas");canvas.width=outW;canvas.height=outH;
+ const ctx=canvas.getContext("2d");ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality="high";
  ctx.drawImage(img,crop.x,crop.y,crop.width,crop.height,0,0,outW,outH);
  const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error("圖片處理失敗")),"image/png"));
  return new File([blob],`maple_${index+1}_panel_upscaled.png`,{type:"image/png"});
@@ -283,34 +291,118 @@ async function cropAndUpscale(file,index){
 function showProcessedPreviews(files){
  previews.innerHTML="";
  files.forEach((f,i)=>{
-   const box=document.createElement("div"),lab=document.createElement("b"),img=document.createElement("img");
+   const box=document.createElement("div"),lab=document.createElement("b"),img=document.createElement("img"),tools=document.createElement("div");
    lab.textContent=`圖 ${i+1}｜已自動裁切＋3×放大`;
-   img.className="preview";
-   img.src=URL.createObjectURL(f);
-   box.append(lab,img);
-   previews.appendChild(box);
+   img.className="preview";img.src=URL.createObjectURL(f);
+   tools.className="crop-tools";
+   const edit=document.createElement("button");edit.type="button";edit.textContent="手動調整裁切";edit.onclick=()=>openCropEditor(i);
+   const redo=document.createElement("button");redo.type="button";redo.textContent="重新自動裁切";redo.onclick=()=>redoAutoCrop(i);
+   tools.append(edit,redo);box.append(lab,img,tools);previews.appendChild(box);
  });
 }
 
 async function prepareImages(){
  const fs=[...fileInput.files];
  if(fs.length!==3){alert("請一次選擇 3 張角色數值截圖");return}
- prepareBtn.disabled=true;
- prepStatus.textContent="正在自動找出屬性面板，並裁切＋3×放大……";
+ prepareBtn.disabled=true;prepStatus.textContent="正在自動找出屬性面板，並裁切＋3×放大……";
  try{
    const out=[];
-   for(let i=0;i<fs.length;i++) out.push(await cropAndUpscale(fs[i],i));
-   processedFiles=out;
-   showProcessedPreviews(out);
-   prepStatus.innerHTML='<span class="ok">✓ 圖片準備完成</span>｜接著按「開始 GPT Vision 辨識」';
+   for(let i=0;i<fs.length;i++){
+     const crop=detectPropertyPanel(await loadImage(fs[i]));
+     cropStates[i]=crop;
+     out.push(await cropAndUpscale(fs[i],i,crop));
+   }
+   processedFiles=out;showProcessedPreviews(out);
+   prepStatus.innerHTML='<span class="ok">✓ 圖片準備完成</span>｜若裁切範圍不正確，可按各圖下方「手動調整裁切」修正。';
  }catch(e){
-   processedFiles=null;
-   prepStatus.innerHTML=`<span class="bad">✕ 圖片準備失敗：${e.message}</span>`;
- }finally{
-   prepareBtn.disabled=false;
- }
+   processedFiles=null;prepStatus.innerHTML=`<span class="bad">✕ 圖片準備失敗：${e.message}</span>`;
+ }finally{prepareBtn.disabled=false;}
 }
 prepareBtn.onclick=prepareImages;
+
+async function redoAutoCrop(index){
+ const fs=[...fileInput.files];
+ try{
+   const crop=detectPropertyPanel(await loadImage(fs[index]));
+   if(!crop)throw new Error("找不到屬性面板");
+   cropStates[index]=crop;
+   processedFiles[index]=await cropAndUpscale(fs[index],index,crop);
+   showProcessedPreviews(processedFiles);
+   prepStatus.innerHTML=`<span class="ok">✓ 圖 ${index+1} 已重新自動裁切＋3×放大</span>`;
+ }catch(e){prepStatus.innerHTML=`<span class="bad">✕ 圖 ${index+1} 重新裁切失敗：${e.message}</span>`;}
+}
+
+function createCropModal(){
+ if(document.getElementById("cropModal"))return;
+ const modal=document.createElement("div");modal.id="cropModal";modal.className="crop-modal";
+ modal.innerHTML=`<div class="crop-dialog">
+   <h3 id="cropTitle">手動調整裁切</h3>
+   <div class="muted">拖曳白框移動位置，或拖曳 8 個控制點調整範圍。</div>
+   <div class="crop-canvas-wrap" id="cropCanvasWrap"><canvas id="cropCanvas"></canvas><div id="cropOverlay" class="crop-overlay"></div></div>
+   <div class="crop-hint">建議完整包住白色屬性面板，不要把左右邊緣的數字裁掉。完成後會自動套用 3× 放大。</div>
+   <div class="crop-dialog-actions"><button id="cropSave">套用裁切＋3×放大</button><button id="cropCancel" class="secondary">取消</button></div>
+ </div>`;
+ document.body.appendChild(modal);
+ document.getElementById("cropCancel").onclick=closeCropEditor;
+ document.getElementById("cropSave").onclick=saveCropEditor;
+ const overlay=document.getElementById("cropOverlay");
+ for(const dir of ["nw","n","ne","e","se","s","sw","w"]){const h=document.createElement("div");h.className=`crop-handle ${dir}`;h.dataset.handle=dir;overlay.appendChild(h);h.addEventListener("pointerdown",e=>startCropDrag(e,dir));}
+ overlay.addEventListener("pointerdown",e=>{if(e.target===overlay)startCropDrag(e,"move")});
+}
+
+function renderCropEditor(){
+ const canvas=document.getElementById("cropCanvas"),wrap=document.getElementById("cropCanvasWrap"),img=cropEditorImage;
+ const maxW=wrap.clientWidth-4,maxH=wrap.clientHeight-4;
+ cropEditorScale=Math.min(maxW/img.naturalWidth,maxH/img.naturalHeight,1);
+ canvas.width=Math.round(img.naturalWidth*cropEditorScale);canvas.height=Math.round(img.naturalHeight*cropEditorScale);
+ canvas.style.width=canvas.width+"px";canvas.style.height=canvas.height+"px";
+ const ctx=canvas.getContext("2d");ctx.drawImage(img,0,0,canvas.width,canvas.height);
+ const state=cropStates[cropEditorIndex]||detectPropertyPanel(img)||{x:img.naturalWidth*.2,y:img.naturalHeight*.1,width:img.naturalWidth*.6,height:img.naturalHeight*.8};
+ cropRect={x:state.x,y:state.y,w:state.width,h:state.height};
+ updateCropOverlay();
+}
+
+function updateCropOverlay(){
+ const canvas=document.getElementById("cropCanvas"),overlay=document.getElementById("cropOverlay");
+ const left=canvas.offsetLeft+cropRect.x*cropEditorScale,top=canvas.offsetTop+cropRect.y*cropEditorScale;
+ overlay.style.left=left+"px";overlay.style.top=top+"px";overlay.style.width=(cropRect.w*cropEditorScale)+"px";overlay.style.height=(cropRect.h*cropEditorScale)+"px";
+}
+function cropPoint(e){
+ const canvas=document.getElementById("cropCanvas"),r=canvas.getBoundingClientRect();
+ return {x:(e.clientX-r.left)/cropEditorScale,y:(e.clientY-r.top)/cropEditorScale};
+}
+function startCropDrag(e,handle){e.preventDefault();e.stopPropagation();const p=cropPoint(e);cropDrag={handle,start:p,rect:{...cropRect}};e.currentTarget.setPointerCapture?.(e.pointerId);window.addEventListener("pointermove",onCropDrag);window.addEventListener("pointerup",endCropDrag,{once:true});}
+function onCropDrag(e){if(!cropDrag)return;const p=cropPoint(e),d={x:p.x-cropDrag.start.x,y:p.y-cropDrag.start.y},r={...cropDrag.rect};
+ const img=cropEditorImage,minW=Math.max(80,img.naturalWidth*.08),minH=Math.max(80,img.naturalHeight*.08),h=cropDrag.handle;
+ if(h==="move"){r.x=Math.max(0,Math.min(img.naturalWidth-r.w,r.x+d.x));r.y=Math.max(0,Math.min(img.naturalHeight-r.h,r.y+d.y));}
+ else{
+   if(h.includes("w")){const nx=Math.max(0,Math.min(r.x+r.w-minW,r.x+d.x));r.w=r.w-(nx-r.x);r.x=nx;}
+   if(h.includes("e")){r.w=Math.max(minW,Math.min(img.naturalWidth-r.x,r.w+d.x));}
+   if(h.includes("n")){const ny=Math.max(0,Math.min(r.y+r.h-minH,r.y+d.y));r.h=r.h-(ny-r.y);r.y=ny;}
+   if(h.includes("s")){r.h=Math.max(minH,Math.min(img.naturalHeight-r.y,r.h+d.y));}
+ }
+ cropRect=r;updateCropOverlay();}
+function endCropDrag(){cropDrag=null;window.removeEventListener("pointermove",onCropDrag);}
+
+async function openCropEditor(index){
+ const fs=[...fileInput.files];if(fs.length!==3)return;
+ createCropModal();cropEditorIndex=index;cropEditorImage=await loadImage(fs[index]);
+ document.getElementById("cropTitle").textContent=`圖 ${index+1}｜手動調整裁切`;
+ document.getElementById("cropModal").classList.add("open");
+ requestAnimationFrame(renderCropEditor);
+}
+function closeCropEditor(){document.getElementById("cropModal")?.classList.remove("open");cropEditorImage=null;cropEditorIndex=-1;}
+async function saveCropEditor(){
+ const fs=[...fileInput.files],index=cropEditorIndex;if(index<0)return;
+ const crop={x:cropRect.x,y:cropRect.y,width:cropRect.w,height:cropRect.h};
+ try{
+   const btn=document.getElementById("cropSave");btn.disabled=true;btn.textContent="處理中……";
+   cropStates[index]=crop;processedFiles[index]=await cropAndUpscale(fs[index],index,crop);
+   showProcessedPreviews(processedFiles);prepStatus.innerHTML=`<span class="ok">✓ 圖 ${index+1} 已套用手動裁切＋3×放大</span>`;
+   closeCropEditor();
+ }catch(e){alert(`圖 ${index+1} 裁切失敗：${e.message}`);}finally{const btn=document.getElementById("cropSave");if(btn){btn.disabled=false;btn.textContent="套用裁切＋3×放大";}}
+}
+
 function num(s){if(s==null||s==="未辨識")return null;let x=String(s).replace(/,/g,"").replace(/%|秒/g,"").trim();
  if(/億/.test(x)){const m=x.match(/^([\d.]+)億(.*)萬?$/);if(m)return parseFloat(m[1])*1e8+(m[2]?parseFloat(m[2])*1e4:0)}
  if(/萬/.test(x)){const m=x.match(/^([\d.]+)萬(.*)$/);if(m)return parseFloat(m[1])*1e4+(m[2]?parseFloat(m[2]):0)}
@@ -674,42 +766,69 @@ function renderValues(data){
  document.getElementById("values").innerHTML=html;
 }
 
+function isMissing(v){return v==null||String(v).trim()===""||String(v).trim()==="未辨識";}
+function collectMissing(data){
+ const missing=[];
+ for(let i=1;i<=3;i++){
+   const key=`image_${i}`,obj=data?.[key]||{};
+   for(const field of expected[key])if(isMissing(obj[field]))missing.push({image:key,field,label:fields[field]});
+ }
+ return missing;
+}
+function mergeDuplicateFields(data){
+ const pairs=["min_damage_multiplier","max_damage_multiplier","exp_gain"];
+ for(const field of pairs){
+   const a=data?.image_2?.[field],b=data?.image_3?.[field];
+   if(!isMissing(a)&&isMissing(b))data.image_3[field]=a;
+   else if(isMissing(a)&&!isMissing(b))data.image_2[field]=b;
+ }
+ return data;
+}
+
+async function retryMissing(images,missing){
+ if(!missing.length)return {data:{},usage:null};
+ const retryByImage={image_1:[],image_2:[],image_3:[]};
+ for(const m of missing)retryByImage[m.image].push(m.field);
+ const r=await fetch("/api/vision",{
+   method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({mode:"retry",images,retryByImage})
+ });
+ const d=await r.json();if(!r.ok)throw Error(d.error||"補漏辨識失敗");
+ return d;
+}
+
 async function run(){
  const fs=processedFiles||[...fileInput.files],status=document.getElementById("status"),btn=document.getElementById("run");
  if(fs.length!==3){alert("請一次選擇 3 張角色數值截圖");return}
- if(!processedFiles){
-   alert("請先按「① 自動裁切＋放大圖片」，準備好圖片後再進行識別。");
-   return;
- }
- btn.disabled=true;
- prepareBtn.disabled=true;
- status.textContent="正在送出 3 張已裁切放大的圖片給後端 GPT Vision……";
+ if(!processedFiles){alert("請先按「① 自動裁切＋放大圖片」，準備好圖片後再進行識別。");return}
+ btn.disabled=true;prepareBtn.disabled=true;status.textContent="正在進行第 1 階段 GPT Vision 辨識……";
  try{
    const images=await Promise.all(fs.map(dataURL));
-   const payload={
-     case:document.getElementById("useCase").value,
-     relicCycle:document.getElementById("relicCycle").checked,
-     images
-   };
-   const r=await fetch("/api/vision",{
-     method:"POST",
-     headers:{"Content-Type":"application/json"},
-     body:JSON.stringify(payload)
-   });
-   const d=await r.json();
-   if(!r.ok)throw Error(d.error||"後端辨識失敗");
-   const data=d.data;
-   renderValues(data);
-   healthCheck(data,document.getElementById("useCase").value);
-   status.innerHTML=`<span class="ok">完成</span>${d.usage?`｜input ${d.usage.input_tokens} / output ${d.usage.output_tokens}`:""}`;
+   const payload={case:document.getElementById("useCase").value,relicCycle:document.getElementById("relicCycle").checked,images,mode:"initial"};
+   const r=await fetch("/api/vision",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+   const d=await r.json();if(!r.ok)throw Error(d.error||"後端辨識失敗");
+   let data=mergeDuplicateFields(d.data||{});
+   let usageIn=d.usage?.input_tokens||0,usageOut=d.usage?.output_tokens||0;
+   let missing=collectMissing(data);
+   if(missing.length){
+     status.textContent=`第 1 階段完成，發現 ${missing.length} 個尚未辨識欄位，正在進行第 2 階段補漏辨識……`;
+     const retry=await retryMissing(images,missing);
+     for(let i=1;i<=3;i++)for(const k of expected[`image_${i}`]){
+       const val=retry.data?.[`image_${i}`]?.[k];
+       if(isMissing(data?.[`image_${i}`]?.[k])&&!isMissing(val))data[`image_${i}`][k]=val;
+     }
+     usageIn+=retry.usage?.input_tokens||0;usageOut+=retry.usage?.output_tokens||0;
+     data=mergeDuplicateFields(data);
+     missing=collectMissing(data);
+   }
+   renderValues(data);healthCheck(data,document.getElementById("useCase").value);
+   const missText=missing.length?`｜仍有 ${missing.length} 項無法從圖片確認`:`｜補漏完成`;
+   status.innerHTML=`<span class="ok">完成</span>${missText}｜input ${usageIn} / output ${usageOut}`;
  }catch(e){
    console.error("Backend Vision error:",e);
    status.innerHTML=`<span class="bad">失敗：${e.message}</span>`;
    document.getElementById("health").innerHTML="辨識失敗，請查看上方錯誤。";
- }finally{
-   btn.disabled=false;
-   prepareBtn.disabled=false;
- }
+ }finally{btn.disabled=false;prepareBtn.disabled=false;}
 }
 document.getElementById("run").onclick=run;
 </script>

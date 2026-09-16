@@ -44,10 +44,10 @@ function propsFor(keys){
   return p;
 }
 
-function makeSchema(){
+function makeSchema(byImage=EXPECTED){
   const properties={}, required=[];
   for(let i=1;i<=3;i++){
-    const key=`image_${i}`, keys=EXPECTED[key];
+    const key=`image_${i}`, keys=Array.isArray(byImage[key])?byImage[key]:[];
     properties[key]={
       type:"object",
       additionalProperties:false,
@@ -56,24 +56,8 @@ function makeSchema(){
     };
     required.push(key);
   }
-  return {
-    type:"object",
-    additionalProperties:false,
-    properties,
-    required
-  };
+  return {type:"object",additionalProperties:false,properties,required};
 }
-
-const PROMPT = `你是楓之谷角色數值截圖的精確抄錄器。
-只做「圖片→數值」，不要自己做健檢。
-嚴格規則：
-1. 依照每張圖片指定欄位逐項抄錄。
-2. 寧可「未辨識」，也不要猜。
-3. 完整保留數字、逗號、小數、%、秒、萬、億。
-4. 例如「696%」絕不能抄成「69%」。
-5. 例如「3億1396萬」與「3189萬8075」必須完整保留。
-6. 圖2與圖3重複出現的欄位，兩張都重新讀取，不要複製。
-7. image_1/image_2/image_3 必須嚴格對應上傳順序。`;
 
 function jsonResponse(body, status=200){
   return new Response(JSON.stringify(body),{
@@ -97,27 +81,37 @@ export async function handleVision(request, env){
       return jsonResponse({error:"圖片格式不正確。"},400);
     }
 
-    const content=[{type:"input_text",text:PROMPT}];
-    images.forEach((url,i)=>{
-      const key=`image_${i+1}`;
+    const isRetry=body?.mode==="retry";
+    let byImage=EXPECTED;
+    if(isRetry){
+      const requested=body?.retryByImage;
+      byImage={image_1:[],image_2:[],image_3:[]};
+      for(let i=1;i<=3;i++){
+        const key=`image_${i}`;
+        const list=Array.isArray(requested?.[key])?requested[key]:[];
+        // 僅接受系統已知欄位，避免客戶端任意擴張 schema。
+        byImage[key]=list.filter(k=>EXPECTED[key].includes(k));
+      }
+      if(!Object.values(byImage).some(list=>list.length)){
+        return jsonResponse({data:{image_1:{},image_2:{},image_3:{}},usage:null},200);
+      }
+    }
+
+    const content=[{type:"input_text",text:isRetry?RETRY_PROMPT:PROMPT}];
+    for(let i=1;i<=3;i++){
+      const key=`image_${i}`,keys=byImage[key];
+      if(!keys.length)continue;
       content.push({
         type:"input_text",
-        text:`這是第 ${i+1} 張圖片，對應 ${key}。只辨識：${EXPECTED[key].map(k=>FIELDS[k]).join("、")}`
+        text:`這是第 ${i} 張圖片，對應 ${key}。只辨識以下欄位：${keys.map(k=>FIELDS[k]).join("、")}。逐項確認欄位名稱與右側數值的對應。`
       });
-      content.push({type:"input_image",image_url:url,detail:"high"});
-    });
+      content.push({type:"input_image",image_url:images[i-1],detail:"high"});
+    }
 
     const apiBody={
       model:MODEL,
       input:[{role:"user",content}],
-      text:{
-        format:{
-          type:"json_schema",
-          name:"maple_character_values_v4",
-          strict:true,
-          schema:makeSchema()
-        }
-      },
+      text:{format:{type:"json_schema",name:isRetry?"maple_character_values_retry_v1":"maple_character_values_v5",strict:true,schema:makeSchema(byImage)}},
       store:false
     };
 
@@ -127,23 +121,15 @@ export async function handleVision(request, env){
     try{
       response=await fetch("https://api.openai.com/v1/responses",{
         method:"POST",
-        headers:{
-          "Content-Type":"application/json",
-          "Authorization":`Bearer ${env.OPENAI_API_KEY}`
-        },
+        headers:{"Content-Type":"application/json", "Authorization":`Bearer ${env.OPENAI_API_KEY}`},
         body:JSON.stringify(apiBody),
         signal:controller.signal
       });
-    }finally{
-      clearTimeout(timer);
-    }
+    }finally{clearTimeout(timer);}
 
     const raw=await response.json();
     if(!response.ok){
-      return jsonResponse({
-        error:raw?.error?.message||"OpenAI API 請求失敗。",
-        status:response.status
-      },response.status);
+      return jsonResponse({error:raw?.error?.message||"OpenAI API 請求失敗。",status:response.status},response.status);
     }
 
     let text=raw.output_text||"";
@@ -151,33 +137,21 @@ export async function handleVision(request, env){
       for(const item of raw.output){
         if(item?.type==="message"&&Array.isArray(item.content)){
           for(const part of item.content){
-            if(part?.type==="output_text"&&typeof part.text==="string") text+=part.text;
+            if(part?.type==="output_text"&&typeof part.text==="string")text+=part.text;
           }
         }
       }
     }
-    if(!text){
-      return jsonResponse({error:"GPT 已回應，但找不到 JSON 輸出。"},502);
-    }
+    if(!text)return jsonResponse({error:"GPT 已回應，但找不到 JSON 輸出。"},502);
 
     let data;
-    try{
-      data=JSON.parse(text);
-    }catch{
-      return jsonResponse({error:"GPT 回傳內容不是有效 JSON。"},502);
-    }
+    try{data=JSON.parse(text);}catch{return jsonResponse({error:"GPT 回傳內容不是有效 JSON。"},502);}
 
-    // Only return the parsed recognition data to the browser.
-    // The OpenAI raw response stays on the backend.
-    return jsonResponse({
-      data,
-      usage:raw.usage||null
-    });
+    return jsonResponse({data,usage:raw.usage||null});
   }catch(error){
-    if(error?.name==="AbortError"){
-      return jsonResponse({error:"GPT Vision 等待超過 120 秒，請稍後再試。"},504);
-    }
+    if(error?.name==="AbortError")return jsonResponse({error:"GPT Vision 等待超過 120 秒，請稍後再試。"},504);
     console.error(error);
     return jsonResponse({error:error?.message||"後端發生未知錯誤。"},500);
   }
 }
+
