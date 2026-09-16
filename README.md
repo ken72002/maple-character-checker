@@ -42,7 +42,7 @@ Cloudflare Dashboard → Workers & Pages → `maple-character-checker`
 
 `gpt-5.6-luna`
 
-前端不再顯示 API Key 輸入框，也不讓使用者修改模型。
+前端不顯示 API Key 輸入框，也不讓使用者修改模型；辨識 JSON 不在前端畫面顯示。
 
 ## API
 
