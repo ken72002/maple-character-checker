@@ -33,12 +33,17 @@ const EXPECTED = {
     "job3_skill_level","job4_skill_level","all_skill_level"]
 };
 
+const SKILL_LEVEL_FIELDS = new Set(["job1_skill_level","job2_skill_level","job3_skill_level","job4_skill_level"]);
+
 function propsFor(keys){
   const p={};
   for(const k of keys){
+    const isSkill = SKILL_LEVEL_FIELDS.has(k);
     p[k]={
       type:"string",
-      description:`「${FIELDS[k]}」的圖片原始文字。完整抄錄；不要換算、不要四捨五入、不要猜。看不到填「未辨識」。`
+      description:isSkill
+        ? `「${FIELDS[k]}」請嚴格依圖片判斷：若面板有顯示數值就完整抄錄（包含 0）；若該欄位完全沒有出現在屬性面板，填「面板未出現該數值」；若欄位應在面板中但看不清楚或無法判讀，才填「未辨識」。不要猜。`
+        : `「${FIELDS[k]}」的圖片原始文字。完整抄錄；不要換算、不要四捨五入、不要猜。看不到填「未辨識」。`
     };
   }
   return p;
@@ -78,7 +83,8 @@ const RETRY_PROMPT = `你是楓之谷角色數值截圖的精確補漏器。
 3. 寧可「未辨識」，也不要猜。
 4. 完整抄錄圖片原始文字，不要換算、不要四捨五入。
 5. 如果同一欄位在圖片中確實可見，即使字體較小，也請仔細放大並重新確認。
-6. image_1/image_2/image_3 必須嚴格對應上傳順序。`;
+6. image_1/image_2/image_3 必須嚴格對應上傳順序。
+7. 1轉、2轉、3轉、4轉技能等級是特殊欄位：若面板明確顯示數值（包含 0）就抄錄；若該欄位完全沒有出現在面板，填「面板未出現該數值」；只有欄位存在但無法判讀時才填「未辨識」。`;
 
 const TARGETED_RETRY_PROMPT = `你是楓之谷角色數值的精確補漏辨識器。
 這些圖片不是完整面板，而是針對單一欄位擷取並放大的局部圖片。
@@ -88,7 +94,8 @@ const TARGETED_RETRY_PROMPT = `你是楓之谷角色數值的精確補漏辨識�
 2. 這張圖片只回答指定欄位，不要把鄰近欄位的數值當成答案。
 3. 仔細辨認數字、小數點、%、秒、萬、億與逗號。
 4. 完整抄錄圖片原始文字，不要換算、不要四捨五入、不要猜。
-5. 如果指定欄位清楚可見，請務必給出圖片中的原始文字；只有真的看不到或無法判讀時才填「未辨識」。`;
+5. 如果指定欄位清楚可見，請務必給出圖片中的原始文字；只有真的看不到或無法判讀時才填「未辨識」。
+6. 1轉、2轉、3轉、4轉技能等級若確認原本屬性面板完全沒有該欄位，填「面板未出現該數值」，不要猜成 0。`;
 
 function jsonResponse(body, status=200){
   return new Response(JSON.stringify(body),{
@@ -124,7 +131,9 @@ export async function handleVision(request, env){
       const properties={},required=[];
       for(const c of valid){
         if(!properties[c.image])properties[c.image]={type:"object",additionalProperties:false,properties:{},required:[]};
-        properties[c.image].properties[c.field]={type:"string",description:`「${FIELDS[c.field]}」的局部放大圖片原始文字。完整抄錄；不要換算、不要四捨五入、不要猜；看不到才填「未辨識」。`};
+        properties[c.image].properties[c.field]={type:"string",description:SKILL_LEVEL_FIELDS.has(c.field)
+          ? `「${FIELDS[c.field]}」若局部圖中有顯示數值就抄錄（包含 0）；若確認面板完全沒有此欄位，填「面板未出現該數值」；只有看得到欄位但無法判讀時才填「未辨識」。不要猜。`
+          : `「${FIELDS[c.field]}」的局部放大圖片原始文字。完整抄錄；不要換算、不要四捨五入、不要猜；看不到才填「未辨識」。`};
         if(!properties[c.image].required.includes(c.field))properties[c.image].required.push(c.field);
       }
       for(const k of ["image_1","image_2","image_3"]){

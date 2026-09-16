@@ -766,6 +766,7 @@ function renderValues(data){
  document.getElementById("values").innerHTML=html;
 }
 
+const skillLevelFields=new Set(["job1_skill_level","job2_skill_level","job3_skill_level","job4_skill_level"]);
 function isMissing(v){return v==null||String(v).trim()===""||String(v).trim()==="未辨識";}
 function collectMissing(data){
  const missing=[];
